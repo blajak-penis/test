@@ -1,117 +1,60 @@
-(()=>{
-"use strict";
-const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
-const canvas=$("#stage"),ctx=canvas.getContext("2d");
-let W=0,H=0,mode="2d",goal="walk",running=false,arenaRunning=false,frame=0,zoom=1;
-let creature=makeCreature("Rookie"), generation=0,best=0,fitness=0;
-let creatures=[creature,makeCreature("Opponent")];
-const log=(m)=>{$("#log").textContent=(m+"\n"+$("#log").textContent).slice(0,3500)};
-
-function makeCreature(name){
-  return {name,bones:[
-    {id:"root",name:"Root",x:0,y:-35,len:42,angle:0},
-    {id:"legL",name:"Leg L",x:-12,y:0,len:42,angle:.35,parent:"root"},
-    {id:"legR",name:"Leg R",x:12,y:0,len:42,angle:-.35,parent:"root"},
-    {id:"footL",name:"Foot L",x:-12,y:40,len:24,angle:.15,parent:"legL"},
-    {id:"footR",name:"Foot R",x:12,y:40,len:24,angle:-.15,parent:"legR"},
-    {id:"armL",name:"Arm L",x:-23,y:-18,len:30,angle:.55,parent:"root"},
-    {id:"armR",name:"Arm R",x:23,y:-18,len:30,angle:-.55,parent:"root"}
-  ],muscles:[
-    {id:"hipL",name:"Hip L",a:"root",b:"legL",power:.8},
-    {id:"hipR",name:"Hip R",a:"root",b:"legR",power:.8},
-    {id:"armL",name:"Arm L",a:"root",b:"armL",power:.6},
-    {id:"armR",name:"Arm R",a:"root",b:"armR",power:.6}
-  ],brain:{weights:Array.from({length:14},()=>Math.random()*2-1)}};
+(()=>{"use strict";
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+const canvas=$("#stage"),ctx=canvas.getContext("2d"),graph=$("#graph"),gctx=graph.getContext("2d");
+let W=0,H=0,mode="2d",goal="walk",zoom=1,drag=null,pan={x:0,y:0},running=false,arenaRunning=false,trainTimer=null;
+let generation=0,best=-Infinity,average=0,history=[],creature=makeCreature("Rookie"),creatures=[creature,makeCreature("Opponent")];
+function rand(){return Math.random()*2-1}
+function makeCreature(name,parent){return{name,bones:parent?parent.bones.map(b=>({...b})):[
+{id:"root",name:"Root",x:0,y:-70,len:46,angle:0,parent:null,mass:2},{id:"thighL",name:"Thigh L",x:-18,y:-25,len:48,angle:.3,parent:"root",mass:1},{id:"thighR",name:"Thigh R",x:18,y:-25,len:48,angle:-.3,parent:"root",mass:1},{id:"shinL",name:"Shin L",x:0,y:0,len:46,angle:.15,parent:"thighL",mass:1},{id:"shinR",name:"Shin R",x:0,y:0,len:46,angle:-.15,parent:"thighR",mass:1},{id:"footL",name:"Foot L",x:0,y:0,len:25,angle:.05,parent:"shinL",mass:.7},{id:"footR",name:"Foot R",x:0,y:0,len:25,angle:-.05,parent:"shinR",mass:.7},{id:"armL",name:"Arm L",x:-25,y:-35,len:36,angle:.5,parent:"root",mass:.7},{id:"armR",name:"Arm R",x:25,y:-35,len:36,angle:-.5,parent:"root",mass:.7}],
+muscles:parent?parent.muscles.map(m=>({...m})):[],brain:parent&&parent.brain?new CALBrain(parent.brain.input,parent.brain.hidden,parent.brain.output,parent.brain.genes.slice()):new CALBrain(12,10,8)};
+if(!name)name="Creature";
+if(!parent)creatureMuscles(name);
+return{name,bones, muscles:parent?muscles:creatureMusclesArray(bones),brain};
 }
-function resize(){const r=canvas.getBoundingClientRect(),d=devicePixelRatio||1;W=r.width;H=r.height;canvas.width=W*d;canvas.height=H*d;ctx.setTransform(d,0,0,d,0,0)}
-addEventListener("resize",resize);resize();
-
-function worldPoint(b){
-  let x=b.x,y=b.y,a=b.angle;
-  if(b.parent){const p=creature.bones.find(q=>q.id===b.parent);if(p){const pp=worldPoint(p);x+=pp.x;y+=pp.y;a+=p.angle}}
-  return {x,y,a};
-}
-function endpoints(b){const p=worldPoint(b);return {x:p.x,y:p.y,tx:p.x+Math.sin(p.a)*b.len,ty:p.y+Math.cos(p.a)*b.len}}
-function draw2D(){
-  ctx.clearRect(0,0,W,H);ctx.save();ctx.translate(W/2,H*.58);ctx.scale(zoom,zoom);
-  ctx.strokeStyle="#172235";ctx.lineWidth=1;for(let x=-600;x<600;x+=40){ctx.beginPath();ctx.moveTo(x,250);ctx.lineTo(x,-250);ctx.stroke()}for(let y=-240;y<280;y+=40){ctx.beginPath();ctx.moveTo(-600,y);ctx.lineTo(600,y);ctx.stroke()}
-  ctx.strokeStyle="#26384d";ctx.beginPath();ctx.moveTo(-600,85);ctx.lineTo(600,85);ctx.stroke();
-  for(const b of creature.bones){const e=endpoints(b);ctx.lineWidth=8;ctx.strokeStyle="#8fb3df";ctx.beginPath();ctx.moveTo(e.x,e.y);ctx.lineTo(e.tx,e.ty);ctx.stroke();ctx.lineWidth=3;ctx.strokeStyle="#dcecff";ctx.stroke();ctx.fillStyle="#4b8bd8";ctx.beginPath();ctx.arc(e.x,e.y,7,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.arc(e.tx,e.ty,6,0,Math.PI*2);ctx.fill()}
-  for(const m of creature.muscles){const a=creature.bones.find(b=>b.id===m.a),b=creature.bones.find(b=>b.id===m.b);if(a&&b){const p=endpoints(a),q=endpoints(b);ctx.strokeStyle="#e28a8a";ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(p.tx,p.ty);ctx.lineTo(q.x,q.y);ctx.stroke()}}
-  ctx.fillStyle="#dce7f7";ctx.font="12px system-ui";ctx.fillText(creature.name,-55,-125);ctx.restore();
-}
-function draw3D(){
-  ctx.clearRect(0,0,W,H);ctx.save();ctx.translate(W/2,H*.55);ctx.scale(zoom,zoom);
-  const nodes=creature.bones.map(b=>({b,p:worldPoint(b)}));
-  const project=(x,y,z)=>({x:x+z*.45,y:y-z*.28});
-  ctx.strokeStyle="#18283d";for(let i=-300;i<=300;i+=40){ctx.beginPath();let a=project(i,110,-180),b=project(i,110,180);ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();a=project(-300,110,i);b=project(300,110,i);ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke()}
-  for(const {b,p} of nodes){const e=project(p.x,p.y,p.x*.18);const t=project(p.x+Math.sin(p.a)*b.len,p.y+Math.cos(p.a)*b.len,p.x*.18);ctx.strokeStyle="#8fb3df";ctx.lineWidth=8;ctx.beginPath();ctx.moveTo(e.x,e.y);ctx.lineTo(t.x,t.y);ctx.stroke();ctx.fillStyle="#4b8bd8";ctx.beginPath();ctx.arc(e.x,e.y,7,0,Math.PI*2);ctx.fill()}
-  ctx.fillStyle="#dce7f7";ctx.font="12px system-ui";ctx.fillText(creature.name,-55,-145);ctx.restore();
-}
-function draw(){mode==="2d"?draw2D():draw3D();frame++;requestAnimationFrame(draw)}
+function creatureMusclesArray(b){const ids=b.map(x=>x.id);return[
+{id:"m1",name:"Hip L",a:ids[0],b:ids[1],power:1},{id:"m2",name:"Hip R",a:ids[0],b:ids[2],power:1},
+{id:"m3",name:"Knee L",a:ids[1],b:ids[3],power:1},{id:"m4",name:"Knee R",a:ids[2],b:ids[4],power:1},
+{id:"m5",name:"Foot L",a:ids[3],b:ids[5],power:.7},{id:"m6",name:"Foot R",a:ids[4],b:ids[6],power:.7}];}
+function creatureMuscles(n){return n}
+function resize(){let r=canvas.getBoundingClientRect(),d=devicePixelRatio||1;W=r.width;H=r.height;canvas.width=W*d;canvas.height=H*d;ctx.setTransform(d,0,0,d,0,0);graph.width=graph.clientWidth*d;graph.height=130*d;gctx.setTransform(d,0,0,d,0,0)}addEventListener("resize",resize);resize();
+function worldPoints(c){const map=new Map();function get(b){if(map.has(b.id))return map.get(b.id);let x=b.x||0,y=b.y||0,a=b.angle||0;if(b.parent){let p=get(c.bones.find(q=>q.id===b.parent));x+=p.tx;y+=p.ty;a+=p.a}let v={x,y,a,tx:x+Math.sin(a)*b.len,ty:y+Math.cos(a)*b.len};map.set(b.id,v);return v}c.bones.forEach(get);return map}
+function draw(){ctx.clearRect(0,0,W,H);if(mode==="2d")draw2d();else draw3d();requestAnimationFrame(draw)}
+function draw2d(){ctx.save();ctx.translate(W/2+pan.x,H*.62+pan.y);ctx.scale(zoom,zoom);ctx.strokeStyle="#182438";for(let x=-600;x<=600;x+=40){ctx.beginPath();ctx.moveTo(x,-300);ctx.lineTo(x,120);ctx.stroke()}for(let y=-280;y<=120;y+=40){ctx.beginPath();ctx.moveTo(-600,y);ctx.lineTo(600,y);ctx.stroke()}ctx.strokeStyle="#34485e";ctx.beginPath();ctx.moveTo(-600,85);ctx.lineTo(600,85);ctx.stroke();
+let m=worldPoints(creature);for(const b of creature.bones){let p=m.get(b.id);ctx.lineWidth=9;ctx.strokeStyle="#7297c7";ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(p.tx,p.ty);ctx.stroke();ctx.lineWidth=2;ctx.strokeStyle="#e4f0ff";ctx.stroke();ctx.fillStyle="#3d7dca";ctx.beginPath();ctx.arc(p.x,p.y,7,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.arc(p.tx,p.ty,6,0,Math.PI*2);ctx.fill()}
+for(const mu of creature.muscles){let a=m.get(mu.a),b=m.get(mu.b);if(a&&b){ctx.strokeStyle="#dc858f";ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(a.tx,a.ty);ctx.lineTo(b.x,b.y);ctx.stroke()}}
+ctx.fillStyle="#e5eefb";ctx.font="12px system-ui";ctx.fillText(creature.name,-55,-150);ctx.restore()}
+function draw3d(){ctx.save();ctx.translate(W/2+pan.x,H*.55+pan.y);ctx.scale(zoom,zoom);let m=worldPoints(creature),pr=(x,y,z)=>({x:x+z*.45,y:y-z*.28});ctx.strokeStyle="#182438";for(let i=-320;i<=320;i+=40){let a=pr(i,110,-180),b=pr(i,110,180);ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();a=pr(-320,110,i);b=pr(320,110,i);ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke()}for(const b of creature.bones){let p=m.get(b.id),a=pr(p.x,p.y,p.x*.12),q=pr(p.tx,p.ty,p.x*.12);ctx.lineWidth=10;ctx.strokeStyle="#7297c7";ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(q.x,q.y);ctx.stroke();ctx.fillStyle="#3d7dca";ctx.beginPath();ctx.arc(a.x,a.y,7,0,Math.PI*2);ctx.fill()}ctx.fillStyle="#e5eefb";ctx.font="12px system-ui";ctx.fillText(creature.name,-55,-150);ctx.restore()}
 draw();
-
-function rebuildLists(){
-  $("#boneList").innerHTML=creature.bones.map((b,i)=>'<div class="item"><span>'+b.name+'</span><input data-bone="'+b.id+'" type="range" min="-180" max="180" value="'+Math.round(b.angle*57.3)+'"></div>').join("");
-  $("#muscleList").innerHTML=creature.muscles.map(m=>'<div class="item"><span>'+m.name+'</span><small>'+m.a+' → '+m.b+'</small></div>').join("");
-  $$("[data-bone]").forEach(el=>el.oninput=()=>{const b=creature.bones.find(q=>q.id===el.dataset.bone);if(b)b.angle=+el.value*Math.PI/180});
-}
-function selectMode(m){mode=m;$("#mode2d").classList.toggle("active",m==="2d");$("#mode3d").classList.toggle("active",m==="3d");$("#modeLabel").textContent=m==="2d"?"2D Rig View":"3D Preview"}
-$("#mode2d").onclick=()=>selectMode("2d");$("#mode3d").onclick=()=>selectMode("3d");
 $$(".tab").forEach(t=>t.onclick=()=>{$$(".tab").forEach(x=>x.classList.remove("active"));$$(".tab-page").forEach(x=>x.classList.remove("active"));t.classList.add("active");$("#tab-"+t.dataset.tab).classList.add("active")});
-$$(".goal").forEach(g=>g.onclick=()=>{$$(".goal").forEach(x=>x.classList.remove("active"));g.classList.add("active");goal=g.dataset.goal;log("Goal changed to "+goal)});
+$("#mode2d").onclick=()=>setMode("2d");$("#mode3d").onclick=()=>setMode("3d");function setMode(m){mode=m;$("#mode2d").classList.toggle("active",m==="2d");$("#mode3d").classList.toggle("active",m==="3d");$("#modeLabel").textContent=m==="2d"?"2D Physics View":"3D Preview"}
+$$(".goal").forEach(x=>x.onclick=()=>{$$(".goal").forEach(q=>q.classList.remove("active"));x.classList.add("active");goal=x.dataset.goal;log("Goal: "+goal)});
 $("#creatureName").oninput=e=>creature.name=e.target.value||"Creature";
-$("#addBone").onclick=()=>{const id="bone"+Date.now();creature.bones.push({id,name:"Bone "+creature.bones.length,x:0,y:0,len:30,angle:0,parent:"root"});rebuildLists()};
-$("#removeBone").onclick=()=>{if(creature.bones.length>1){const b=creature.bones.pop();creature.muscles=creature.muscles.filter(m=>m.a!==b.id&&m.b!==b.id);rebuildLists()}};
-$("#addMuscle").onclick=()=>{const ids=creature.bones.map(b=>b.id);creature.muscles.push({id:"m"+Date.now(),name:"Muscle "+creature.muscles.length,a:ids[0],b:ids[Math.min(1,ids.length-1)],power:.5});rebuildLists()};
-$("#removeMuscle").onclick=()=>{creature.muscles.pop();rebuildLists()};
-$("#bodyPreset").onchange=()=>applyBodyPreset($("#bodyPreset").value);
-$("#applyPreset").onclick=()=>applyBodyPreset($("#bodyPreset").value);
-function applyBodyPreset(p){
-  const c=makeCreature(creature.name); if(p==="Runner")c.bones.forEach(b=>b.len*=1.2);
-  if(p==="Climber"){c.bones.push({id:"handL",name:"Hand L",x:-20,y:0,len:18,angle:0,parent:"armL"},{id:"handR",name:"Hand R",x:20,y:0,len:18,angle:0,parent:"armR"});}
-  if(p==="Quadruped"){c.bones.push({id:"rearL",name:"Rear L",x:-16,y:18,len:38,angle:.3,parent:"root"},{id:"rearR",name:"Rear R",x:16,y:18,len:38,angle:-.3,parent:"root"});}
-  creature.bones=c.bones;creature.muscles=c.muscles;creature.brain=c.brain;rebuildLists();log("Applied "+p+" body preset");
-}
-$("#population").oninput=e=>$("#popOut").textContent=e.target.value;
-$("#mutation").oninput=e=>$("#mutOut").textContent=e.target.value+"%";
-$("#trainSpeed").oninput=e=>$("#speedOut").textContent=e.target.value+"x";
-
-let trainTimer=null;
-function score(){
-  const base={walk:Math.random()*40+40,run:Math.random()*50+35,jump:Math.random()*45+35,roll:Math.random()*45+30,climb:Math.random()*40+25,balance:Math.random()*50+35,fight:Math.random()*45+35}[goal];
-  const complexity=creature.bones.length*1.7+creature.muscles.length*2;
-  return Math.max(0,base+complexity+generation*.8);
-}
-function trainStep(){
-  generation++;fitness=score();if(fitness>best)best=fitness;
-  creature.brain.weights=creature.brain.weights.map(w=>w+(Math.random()-.5)*(+$("#mutation").value/100));
-  $("#generation").textContent=generation;$("#fitness").textContent=fitness.toFixed(1);$("#best").textContent=best.toFixed(1);
-  $("#runState").textContent="TRAINING";log("gen "+generation+" · "+goal+" · fitness "+fitness.toFixed(1));
-}
-$("#stepBtn").onclick=trainStep;
-$("#trainBtn").onclick=()=>{if(running){stopTraining();return}running=true;$("#trainBtn").textContent="Pause training";const tick=()=>{if(!running)return;for(let i=0;i<+$("#trainSpeed").value;i++)trainStep();trainTimer=setTimeout(tick,90)};tick()};
-function stopTraining(){running=false;clearTimeout(trainTimer);$("#trainBtn").textContent="Start training";$("#runState").textContent="READY"}
-$("#stopBtn").onclick=stopTraining;
-
-function fillArena(){["arenaA","arenaB"].forEach((id,i)=>{$("#"+id).innerHTML=creatures.map((c,n)=>'<option value="'+n+'">'+c.name+'</option>').join("");$("#"+id).value=i})}
-$("#fightBtn").onclick=()=>{arenaRunning=true;$("#runState").textContent="ARENA";log("Arena started")};
-$("#stopFight").onclick=()=>{arenaRunning=false;$("#runState").textContent="READY";log("Arena stopped")};
-
-const oldDraw=draw; // arena overlay via draw loop patch
-function arenaOverlay(){
-  if(!arenaRunning)return;
-  ctx.save();ctx.fillStyle="rgba(5,8,12,.22)";ctx.fillRect(0,0,W,H);ctx.fillStyle="#cfe0f8";ctx.font="bold 14px system-ui";ctx.fillText("ARENA · "+creatures[+$("#arenaA").value].name+" vs "+creatures[+$("#arenaB").value].name,14,26);ctx.restore();
-}
-const rawRAF=requestAnimationFrame; // overlay through independent loop
-setInterval(()=>arenaOverlay(),120);
-
+function rebuildLists(){$("#boneList").innerHTML=creature.bones.map(b=>'<div class="item"><span>'+b.name+'</span><input data-bone="'+b.id+'" type="range" min="-180" max="180" value="'+Math.round((b.angle||0)*57.3)+'"></div>').join("");$("#muscleList").innerHTML=creature.muscles.map(m=>'<div class="item"><span>'+m.name+'</span><small>'+m.a+" → "+m.b+"</small></div>").join("");$$("[data-bone]").forEach(e=>e.oninput=()=>{let b=creature.bones.find(q=>q.id===e.dataset.bone);if(b)b.angle=+e.value*Math.PI/180})}
+$("#addBone").onclick=()=>{let id="b"+Date.now(),parent=creature.bones[0]?.id;creature.bones.push({id,name:"Bone "+creature.bones.length,x:0,y:0,len:30,angle:0,parent,mass:1});rebuildLists()};
+$("#removeBone").onclick=()=>{if(creature.bones.length>1){let b=creature.bones.pop();creature.muscles=creature.muscles.filter(m=>m.a!==b.id&&m.b!==b.id);rebuildLists()}};
+$("#addMuscle").onclick=()=>{let ids=creature.bones.map(b=>b.id);if(ids.length>1)creature.muscles.push({id:"m"+Date.now(),name:"Motor "+creature.muscles.length,a:ids[0],b:ids[1],power:1});rebuildLists()};
+$("#removeMuscle").onclick=()=>{if(creature.muscles.length)creature.muscles.pop();rebuildLists()};
+function applyPreset(p){let c=makeCreature(creature.name);if(p==="Runner")c.bones.forEach(b=>b.len*=1.25);if(p==="Quadruped"){c.bones.push({id:"rearL",name:"Rear L",x:-18,y:0,len:42,angle:.25,parent:"root",mass:1},{id:"rearR",name:"Rear R",x:18,y:0,len:42,angle:-.25,parent:"root",mass:1})}if(p==="Climber"){c.bones.push({id:"handL",name:"Hand L",x:0,y:0,len:20,angle:0,parent:"armL",mass:.4},{id:"handR",name:"Hand R",x:0,y:0,len:20,angle:0,parent:"armR",mass:.4})}if(p==="Blob")c.bones=c.bones.slice(0,1);creature.bones=c.bones;creature.muscles=creatureMusclesArray(c.bones);creature.brain=c.brain;rebuildLists();log("Applied "+p)}
+$("#bodyPreset").onchange=e=>applyPreset(e.target.value);$("#applyPreset").onclick=()=>applyPreset($("#bodyPreset").value);
+$("#population").oninput=e=>$("#popOut").textContent=e.target.value;$("#mutation").oninput=e=>$("#mutOut").textContent=e.target.value+"%";$("#trainSpeed").oninput=e=>$("#speedOut").textContent=e.target.value+"x";$("#episodeSteps").oninput=e=>$("#episodeOut").textContent=e.target.value;
+function controller(brain,body,t,steps){let p=body.parts[0]||{x:0,y:0,vx:0,vy:0};let avg=body.parts.reduce((a,q)=>a+q.x,0)/Math.max(1,body.parts.length);let input=[p.x/100,p.y/100,p.vx/10,p.vy/10,Math.sin(t),Math.cos(t),avg/100,goal==="walk"?1:0,goal==="run"?1:0,goal==="jump"?1:0,goal==="balance"?1:0,goal==="climb"?1:0];return brain.forward(input)}
+function fitnessFor(c){let body=CALPhysics.makeBody(c),start=CALPhysics.displacement(body),maxY=0,stable=0,steps=+$("#episodeSteps").value;for(let i=0;i<steps;i++){let o=controller(c.brain,body,i/30,steps);let motors=c.muscles.length?c.muscles.map((_,j)=>o[j%o.length]):o;CALPhysics.step(body,motors,1/30);maxY=Math.max(maxY,-body.parts[0].y);if(Math.abs(body.parts[0].x)<10)stable++}let dist=CALPhysics.displacement(body)-start;let f=0;if(goal==="walk")f=dist+stable*.01;if(goal==="run")f=dist*1.8+stable*.01;if(goal==="jump")f=maxY*1.8+dist*.1;if(goal==="roll")f=Math.abs(dist)+maxY*.1;if(goal==="climb")f=maxY+dist*.2;if(goal==="balance")f=stable*.25-Math.abs(dist)*.03;if(goal==="fight")f=dist+stable*.02;return Math.max(-999,f)}
+let evo=null;
+function buildEvolution(){let size=+$("#population").value,mutation=+$("#mutation").value/100;evo=new CALEvolution(()=>makeCreature("evo"),fitnessFor,size,mutation);evo.seed()}
+function trainStep(){if(!evo)buildEvolution();let r=evo.step();generation=evo.generation;best=r.score;average=evo.avg;creature=r.x;$("#generation").textContent=generation;$("#fitness").textContent=best.toFixed(1);$("#average").textContent=average.toFixed(1);creatures[0]=creature;rebuildLists();fillArena();history.push(best);history=history.slice(-60);drawGraph();$("#runState").textContent="TRAINING";log("generation "+generation+" · "+goal+" · best "+best.toFixed(1))}
+function drawGraph(){let w=graph.clientWidth,h=130;gctx.clearRect(0,0,w,h);if(!history.length)return;let min=Math.min(...history),max=Math.max(...history),range=max-min||1;gctx.strokeStyle="#4c78b7";gctx.lineWidth=2;gctx.beginPath();history.forEach((v,i)=>{let x=i/(history.length-1||1)*w,y=h-8-(v-min)/range*(h-16);i?gctx.lineTo(x,y):gctx.moveTo(x,y)});gctx.stroke()}
+$("#stepBtn").onclick=trainStep;$("#trainBtn").onclick=()=>{if(running){stopTrain();return}running=true;$("#trainBtn").textContent="Pause training";let tick=()=>{if(!running)return;for(let i=0;i<+$("#trainSpeed").value;i++)trainStep();trainTimer=setTimeout(tick,60)};tick()};function stopTrain(){running=false;clearTimeout(trainTimer);$("#trainBtn").textContent="Start training";if(!arenaRunning)$("#runState").textContent="READY"}$("#stopBtn").onclick=stopTrain;
+function fillArena(){["arenaA","arenaB"].forEach((id,i)=>{$("#"+id).innerHTML=creatures.map((c,n)=>'<option value="'+n+'">'+c.name+"</option>").join("");$("#"+id).value=Math.min(i,creatures.length-1)})}
+$("#fightBtn").onclick=()=>{arenaRunning=true;$("#runState").textContent="ARENA";log("Arena started")};$("#stopFight").onclick=()=>{arenaRunning=false;$("#runState").textContent=running?"TRAINING":"READY";log("Arena stopped")};
+function arenaTick(){if(!arenaRunning)return;let a=creatures[+$("#arenaA").value],b=creatures[+$("#arenaB").value];if(!a||!b)return;let A=CALPhysics.makeBody(a),B=CALPhysics.makeBody(b);for(let i=0;i<100;i++){let oa=controller(a.brain,A,i/30,100),ob=controller(b.brain,B,i/30,100);CALPhysics.step(A,oa,1/30);CALPhysics.step(B,ob,1/30)}log("Arena score · "+a.name+": "+CALPhysics.displacement(A).toFixed(1)+" · "+b.name+": "+CALPhysics.displacement(B).toFixed(1))}
+setInterval(arenaTick,300);
 $("#newCreature").onclick=()=>{creature=makeCreature("Creature "+(creatures.length+1));creatures.push(creature);rebuildLists();fillArena();log("Created new creature")};
-$("#resetCreature").onclick=()=>{creature=makeCreature($("#creatureName").value||"Rookie");rebuildLists();log("Creature reset")};
-$("#saveBtn").onclick=()=>{const blob=new Blob([JSON.stringify(creature,null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=(creature.name||"creature")+".json";a.click();URL.revokeObjectURL(a.href)};
-$("#loadFile").onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{creature=JSON.parse(r.result);creatures[0]=creature;rebuildLists();fillArena();log("Imported "+f.name)}catch(err){log("Import failed")}};r.readAsText(f)};
-$("#demoBtn").onclick=()=>{generation=0;best=0;fitness=0;for(let i=0;i<40;i++)trainStep();log("Loaded demo evolution")};
-
-rebuildLists();fillArena();
-window.addEventListener("pointerdown",e=>{if(e.target===canvas)canvas.setPointerCapture(e.pointerId)});
+$("#resetCreature").onclick=()=>{creature=makeCreature($("#creatureName").value||"Rookie");creatures[0]=creature;rebuildLists();fillArena();log("Reset creature")};
+$("#saveBtn").onclick=()=>{let blob=new Blob([JSON.stringify(creature,null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=(creature.name||"creature")+".json";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)};
+$("#loadFile").onchange=e=>{let f=e.target.files[0];if(!f)return;let r=new FileReader();r.onload=()=>{try{creature=JSON.parse(r.result);creatures[0]=creature;rebuildLists();fillArena();log("Imported "+f.name)}catch(err){log("Import failed: "+err.message)}};r.readAsText(f)};
+$("#demoBtn").onclick=()=>{running=false;generation=0;best=-Infinity;history=[];evo=null;for(let i=0;i<10;i++)trainStep();drawGraph();log("Demo evolution complete")};
+canvas.addEventListener("pointerdown",e=>{let r=canvas.getBoundingClientRect(),sx=(e.clientX-r.left-W/2-pan.x)/zoom,sy=(e.clientY-r.top-H*.62-pan.y)/zoom,m=worldPoints(creature);for(let b of creature.bones){let p=m.get(b.id);if(Math.hypot(sx-p.x,sy-p.y)<16){drag={b,ox:sx,oy:sy};canvas.setPointerCapture(e.pointerId);break}}});
+canvas.addEventListener("pointermove",e=>{if(!drag)return;let r=canvas.getBoundingClientRect(),sx=(e.clientX-r.left-W/2-pan.x)/zoom,sy=(e.clientY-r.top-H*.62-pan.y)/zoom;drag.b.x+=sx-drag.ox;drag.b.y+=sy-drag.oy;drag.ox=sx;drag.oy=sy});
+canvas.addEventListener("pointerup",()=>drag=null);
+rebuildLists();fillArena();drawGraph();log("Ready · real physics + evolutionary controller loaded");
 })();
