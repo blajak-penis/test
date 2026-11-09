@@ -1,110 +1,32 @@
 <!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#0a0d12">
-<title>Creature AI Lab</title>
-<link rel="stylesheet" href="css/style.css">
-</head>
-<body>
-<div id="app">
-<header class="topbar">
-  <div><b>Creature AI Lab</b><span class="sub"> · rig • train • simulate</span></div>
-  <div class="top-actions">
-    <button id="mode2d" class="active">2D</button><button id="mode3d">3D</button>
-    <button id="newCreature">New</button><button id="resetCreature">Reset</button>
-  </div>
-</header>
-
-<main class="layout">
-<section class="stage-wrap">
-  <div class="stage-head">
-    <div><span id="modeLabel">2D Rig View</span><span id="runState" class="pill">READY</span></div>
-    <div class="small" id="fps">60 FPS</div>
-  </div>
-  <canvas id="stage"></canvas>
-  <div class="touch-help">Drag joints to edit · pinch/scroll to zoom · hold Train to evolve</div>
-</section>
-
-<aside class="panel">
-  <div class="tabs">
-    <button data-tab="rig" class="tab active">Rig</button>
-    <button data-tab="train" class="tab">Train</button>
-    <button data-tab="arena" class="tab">Arena</button>
-    <button data-tab="data" class="tab">Data</button>
-  </div>
-
-  <div id="tab-rig" class="tab-page active">
-    <div class="card">
-      <h3>Creature</h3>
-      <label>Name<input id="creatureName" value="Rookie"></label>
-      <label>Body preset<select id="bodyPreset"><option>Walker</option><option>Runner</option><option>Climber</option><option>Blob</option><option>Quadruped</option></select></label>
-      <button id="applyPreset" class="wide">Apply body preset</button>
-    </div>
-    <div class="card">
-      <h3>Skeleton</h3>
-      <div class="row"><button id="addBone">+ Bone</button><button id="removeBone">− Bone</button></div>
-      <div id="boneList" class="list"></div>
-    </div>
-    <div class="card">
-      <h3>Muscles</h3>
-      <div class="row"><button id="addMuscle">+ Muscle</button><button id="removeMuscle">− Muscle</button></div>
-      <div id="muscleList" class="list"></div>
-    </div>
-  </div>
-
-  <div id="tab-train" class="tab-page">
-    <div class="card">
-      <h3>Goal</h3>
-      <div class="goal-grid" id="goals">
-        <button data-goal="walk" class="goal active">🚶 Walk</button>
-        <button data-goal="run" class="goal">🏃 Run</button>
-        <button data-goal="jump" class="goal">⬆️ Jump</button>
-        <button data-goal="roll" class="goal">🔄 Roll</button>
-        <button data-goal="climb" class="goal">🧗 Climb</button>
-        <button data-goal="balance" class="goal">⚖️ Balance</button>
-        <button data-goal="fight" class="goal">⚔️ Arena</button>
-      </div>
-    </div>
-    <div class="card">
-      <h3>Evolution</h3>
-      <label>Population <input id="population" type="range" min="4" max="40" value="16"><output id="popOut">16</output></label>
-      <label>Mutation <input id="mutation" type="range" min="1" max="50" value="12"><output id="mutOut">12%</output></label>
-      <label>Speed <input id="trainSpeed" type="range" min="1" max="10" value="5"><output id="speedOut">5x</output></label>
-      <div class="row"><button id="trainBtn" class="primary grow">Start training</button><button id="stepBtn">Step</button></div>
-      <button id="stopBtn" class="wide danger">Stop</button>
-    </div>
-    <div class="card stats">
-      <div><span>Generation</span><b id="generation">0</b></div>
-      <div><span>Fitness</span><b id="fitness">0</b></div>
-      <div><span>Best</span><b id="best">0</b></div>
-    </div>
-  </div>
-
-  <div id="tab-arena" class="tab-page">
-    <div class="card">
-      <h3>Two-creature arena</h3>
-      <label>Creature A<select id="arenaA"></select></label>
-      <label>Creature B<select id="arenaB"></select></label>
-      <button id="fightBtn" class="wide primary">Start arena</button>
-      <button id="stopFight" class="wide danger">Stop arena</button>
-      <p class="small">Arena mode is a non-graphic physics/game simulation. Trained controllers compete for position and energy.</p>
-    </div>
-  </div>
-
-  <div id="tab-data" class="tab-page">
-    <div class="card">
-      <h3>Project data</h3>
-      <button id="saveBtn" class="wide">Export creature JSON</button>
-      <label class="file">Import JSON<input id="loadFile" type="file" accept=".json,application/json"></label>
-      <button id="demoBtn" class="wide">Load demo evolution</button>
-      <pre id="log"></pre>
-    </div>
-  </div>
-</aside>
-</main>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#080b11"><title>Creature AI Lab</title><link rel="stylesheet" href="css/style.css">
+</head><body><div id="app">
+<header class="topbar"><div><b>Creature AI Lab</b><span class="sub"> · evolutionary creature studio</span></div>
+<div class="top-actions"><button id="mode2d" class="active">2D</button><button id="mode3d">3D</button><button id="newCreature">New</button><button id="resetCreature">Reset</button></div></header>
+<main class="layout"><section class="stage-wrap"><div class="stage-head"><div><span id="modeLabel">2D Physics View</span><span id="runState" class="pill">READY</span></div><div class="small"><span id="fps">60</span> FPS</div></div>
+<canvas id="stage"></canvas><div class="touch-help">Drag joints · pinch/scroll zoom · Train runs real physics simulations</div></section>
+<aside class="panel"><div class="tabs">
+<button data-tab="rig" class="tab active">Rig</button><button data-tab="train" class="tab">Train</button><button data-tab="arena" class="tab">Arena</button><button data-tab="data" class="tab">Data</button></div>
+<div id="tab-rig" class="tab-page active">
+<div class="card"><h3>Creature</h3><label>Name<input id="creatureName" value="Rookie"></label><label>Body preset<select id="bodyPreset"><option>Walker</option><option>Runner</option><option>Climber</option><option>Blob</option><option>Quadruped</option></select></label><button id="applyPreset" class="wide">Apply body preset</button></div>
+<div class="card"><h3>Skeleton</h3><div class="row"><button id="addBone">+ Bone</button><button id="removeBone">− Bone</button></div><div id="boneList" class="list"></div></div>
+<div class="card"><h3>Muscles / motors</h3><div class="row"><button id="addMuscle">+ Muscle</button><button id="removeMuscle">− Muscle</button></div><div id="muscleList" class="list"></div></div>
 </div>
-<script src="js/app.js"></script>
-</body>
-</html>
+<div id="tab-train" class="tab-page">
+<div class="card"><h3>Goal</h3><div class="goal-grid" id="goals">
+<button data-goal="walk" class="goal active">🚶 Walk</button><button data-goal="run" class="goal">🏃 Run</button><button data-goal="jump" class="goal">⬆️ Jump</button><button data-goal="roll" class="goal">🔄 Roll</button><button data-goal="climb" class="goal">🧗 Climb</button><button data-goal="balance" class="goal">⚖️ Balance</button><button data-goal="fight" class="goal">⚔️ Arena</button></div></div>
+<div class="card"><h3>Evolution</h3><label>Population<input id="population" type="range" min="4" max="40" value="16"><output id="popOut">16</output></label>
+<label>Mutation<input id="mutation" type="range" min="1" max="50" value="12"><output id="mutOut">12%</output></label>
+<label>Simulation speed<input id="trainSpeed" type="range" min="1" max="10" value="5"><output id="speedOut">5x</output></label>
+<label>Episode steps<input id="episodeSteps" type="range" min="100" max="1200" step="50" value="400"><output id="episodeOut">400</output></label>
+<div class="row"><button id="trainBtn" class="primary grow">Start training</button><button id="stepBtn">Step generation</button></div><button id="stopBtn" class="wide danger">Stop</button></div>
+<div class="card stats"><div><span>Generation</span><b id="generation">0</b></div><div><span>Best fitness</span><b id="fitness">0</b></div><div><span>Average</span><b id="average">0</b></div></div>
+<div class="card"><h3>Fitness graph</h3><canvas id="graph" height="130"></canvas></div>
+</div>
+<div id="tab-arena" class="tab-page"><div class="card"><h3>Two-creature arena</h3><label>Creature A<select id="arenaA"></select></label><label>Creature B<select id="arenaB"></select></label><div class="row"><button id="fightBtn" class="primary grow">Start arena</button><button id="stopFight">Stop</button></div><p class="small">Physics-only competition: creatures push for territory and score points. No graphic damage.</p></div></div>
+<div id="tab-data" class="tab-page"><div class="card"><h3>Project data</h3><button id="saveBtn" class="wide">Export creature JSON</button><label class="file">Import JSON<input id="loadFile" type="file" accept=".json,application/json"></label><button id="demoBtn" class="wide">Run demo evolution</button><pre id="log"></pre></div></div>
+</aside></main></div>
+<script src="js/physics.js"></script><script src="js/neural.js"></script><script src="js/evolution.js"></script><script src="js/app.js"></script>
+</body></html>
